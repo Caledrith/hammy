@@ -5,12 +5,39 @@ Bambu Studio GUI**. These can't be hand-written or generated here; they must com
 off a machine running the version of Bambu Studio you print with, so they match
 its schema exactly.
 
-## What to export
+## Critical: the CLI needs FLATTENED full configs
 
-In Bambu Studio, for each preset you use, open the preset dropdown (Printer /
-Process / Filament) and choose **Export → Export preset** (or export the config
-bundle and split it). Save the JSONs into the folders below, then make sure
-[`manifest.json`](manifest.json) points at the filenames you saved.
+The Bambu Studio CLI does **not** resolve preset inheritance. A raw exported
+preset is only the *delta* from its parent (`"inherits": "..."` + a handful of
+keys); feeding that to `--load-settings` makes the CLI silently fall back to
+defaults or segfault. Each JSON must be a **complete config with every key and
+no `inherits` reference**.
+
+Note: `--datadir` (which would let the CLI resolve inheritance from a data dir)
+is an **OrcaSlicer** feature; **Bambu Studio does not support it**. So the JSONs
+must be self-contained.
+
+### Producing flattened JSONs
+
+The reliable way is to let the CLI dump the fully-resolved current config with
+`--export-settings`:
+
+1. In the GUI, select the exact Printer + Process + Filament presets you print
+   with and save/export a **project 3mf** (its presets are embedded).
+2. Ask the CLI to flatten them:
+   ```bash
+   bambu-studio --load-3mf your-project.3mf --export-settings full.json
+   ```
+   `full.json` is a complete, inheritance-free dump.
+3. Split it into the machine / process / filament JSONs (or keep the machine +
+   process together for `--load-settings` and the filament separate for
+   `--load-filaments`) and save them below.
+
+(Exact `--export-settings` behavior is version-dependent; confirm during the CLI
+spike in [`../scripts/worker/README.md`](../scripts/worker/README.md).)
+
+Save the JSONs into the folders below, then point [`manifest.json`](manifest.json)
+at the filenames:
 
 ```
 profiles/
@@ -19,6 +46,10 @@ profiles/
   process/               # one per model + layer height (P1S-0.2mm.json, ...)
   filament/              # one per material (PLA.json, PETG-CF.json, ...)
 ```
+
+You only need profiles for the models/materials actually in use. With an empty
+`printers` table every plate targets **P1S**, so a P1S machine + process plus one
+filament JSON per material you sell is enough to start.
 
 ## How the worker uses them
 

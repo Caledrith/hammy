@@ -109,10 +109,13 @@ export function buildArgs(opts: {
     opts.filament,
     "--curr-bed-type",
     opts.bedType,
+    // Tolerate profiles/3mf written by a newer Studio than this CLI build.
+    "--allow-newer-file",
     "--arrange",
     "1",
+    // --orient is a valueless flag in the official CLI (passing a value makes
+    // it look like a positional input file). --slice 0 = slice all plates.
     "--orient",
-    "1",
     "--slice",
     "0",
     "--export-3mf",

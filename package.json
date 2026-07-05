@@ -20,6 +20,7 @@
     "queue:stats": "tsx scripts/queue-stats.ts",
     "reresolve": "tsx scripts/reresolve.ts",
     "import-files": "tsx scripts/import-file-listing.ts",
+    "push-files": "tsx scripts/push-file-listing.ts",
     "worker": "tsx scripts/worker/index.ts"
   },
   "dependencies": {

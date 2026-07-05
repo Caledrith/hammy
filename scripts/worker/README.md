@@ -54,12 +54,21 @@ Slicer profiles live in the repo's [`profiles/`](../../profiles/README.md) folde
    - `OUTPUT_DIR` — where `.gcode.3mf` files are written (e.g. `D:\plates-out`)
 5. **Export slicer profiles** from the Bambu Studio GUI into `profiles/` and
    update `profiles/manifest.json` — see [`profiles/README.md`](../../profiles/README.md).
-6. **Register the model library on the server** (run once, from the server or any
-   box with `DATABASE_URL`), feeding it a listing of the STL tree:
+6. **Register the model library on the server** (run once), feeding it a listing
+   of the STL tree:
    ```powershell
    dir /b /s D:\models > stl-files.txt   # or maintain the existing stl-files.txt
-   npm run import-files
    ```
+   - If the box can reach the DB directly: `npm run import-files`
+   - If it can't (DB only on LAN/VPN, as on the shop PC): push the listing to the
+     running server, which does the DB write server-side:
+     ```powershell
+     npm run push-files -- --server=https://your-vm:3085
+     # SERVER_URL/WORKER_TOKEN can come from env instead of flags
+     # or hand-curl:
+     # curl -X POST "$SERVER/api/admin/import-files" \
+     #   -H "authorization: Bearer $WORKER_TOKEN" --data-binary @stl-files.txt
+     ```
 7. **Test run**
    ```powershell
    npm run worker
@@ -91,11 +100,13 @@ STLs. `cli.ts` centralizes the flags so this is the only place to adjust.
      --load-settings "profiles\machine\P1S.json;profiles\process\P1S-0.2mm.json" `
      --load-filaments "profiles\filament\PLA.json" `
      --curr-bed-type "Textured PEI Plate" `
-     --arrange 1 --orient 1 --slice 0 `
+     --allow-newer-file --arrange 1 --orient --slice 0 `
      --export-3mf "D:\plates-out\spike.gcode.3mf" `
      "D:\models\path\to\a.stl" "D:\models\path\to\a.stl" "D:\models\path\to\b.stl"
    ```
 3. **Verify each assumption** the worker relies on:
+   - [ ] Profiles are FLATTENED full configs (no `inherits`) or the CLI silently
+         falls back to defaults / segfaults. See `profiles/README.md`.
    - [ ] Repeating a path N times produces N copies on the plate.
    - [ ] More parts than fit on one bed overflow onto additional plates
          (rather than erroring). Note how that shows up so capacity tuning in
