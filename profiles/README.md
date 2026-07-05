@@ -24,9 +24,10 @@ The reliable way is to let the CLI dump the fully-resolved current config with
 
 1. In the GUI, select the exact Printer + Process + Filament presets you print
    with and save/export a **project 3mf** (its presets are embedded).
-2. Ask the CLI to flatten them:
+2. Ask the CLI to flatten them (there is no `--load-3mf` flag; input files are
+   positional arguments at the end of the command):
    ```bash
-   bambu-studio --load-3mf your-project.3mf --export-settings full.json
+   bambu-studio --export-settings full.json your-project.3mf
    ```
    `full.json` is a complete, inheritance-free dump.
 3. Split it into the machine / process / filament JSONs (or keep the machine +
