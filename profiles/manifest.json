@@ -1,0 +1,21 @@
+{
+  "_comment": "Maps presets to Bambu Studio profile JSONs exported from the GUI (preset dropdown -> Export). Paths are relative to this folder. Fill in real files per profiles/README.md; the worker fails a plate with a clear reason if a needed profile is missing.",
+  "machineByModel": {
+    "P1S": "machine/P1S.json",
+    "P2S": "machine/P2S.json",
+    "H2": "machine/H2.json"
+  },
+  "processByModel": {
+    "P1S": "process/P1S-0.2mm.json",
+    "P2S": "process/P2S-0.2mm.json",
+    "H2": "process/H2-0.2mm.json"
+  },
+  "filamentByMaterial": {
+    "PLA": "filament/PLA.json",
+    "PLA+": "filament/PLA.json",
+    "PETG": "filament/PETG.json",
+    "PETG-CF": "filament/PETG-CF.json",
+    "ABS": "filament/ABS.json",
+    "ASA": "filament/ASA.json"
+  }
+}

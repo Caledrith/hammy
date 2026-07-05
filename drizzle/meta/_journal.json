@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1783224405856,
+      "tag": "0000_bouncy_salo",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783224505856,
+      "tag": "0001_channels",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783224605856,
+      "tag": "0002_printable_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783281651893,
+      "tag": "0003_lonely_richard_fisk",
+      "breakpoints": true
+    }
+  ]
+}

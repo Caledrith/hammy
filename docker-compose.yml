@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hammy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hammy
+      POSTGRES_PASSWORD: hammy
+      POSTGRES_DB: hammy
+    ports:
+      - "5432:5432"
+    volumes:
+      - hammy-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hammy -d hammy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hammy-pgdata:

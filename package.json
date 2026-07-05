@@ -1,0 +1,42 @@
+{
+  "name": "hammy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3085",
+    "build": "next build",
+    "start": "next start -p 3085",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "inspect-orders": "tsx scripts/inspect-orders.ts",
+    "sync-orders": "tsx scripts/sync-orders.ts",
+    "seed": "tsx scripts/seed.ts",
+    "db:check": "tsx scripts/db-check.ts",
+    "queue:stats": "tsx scripts/queue-stats.ts",
+    "reresolve": "tsx scripts/reresolve.ts",
+    "import-files": "tsx scripts/import-file-listing.ts",
+    "worker": "tsx scripts/worker/index.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "next": "^16.2.10",
+    "postgres": "^3.4.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  }
+}
