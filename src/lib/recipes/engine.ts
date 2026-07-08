@@ -20,6 +20,7 @@ export interface ResolvedJob {
   slicerProfile: string | null;
   status: "ready" | "needs_review";
   reviewReason: string | null;
+  reviewKind: "no_bom_rule" | "filament_unknown" | null;
 }
 
 export interface ResolvedBom {
@@ -358,6 +359,7 @@ export async function resolveLineItem(
           slicerProfile: null,
           status: "needs_review",
           reviewReason: `No BOM rule matched options (variant: ${lineItem.variantTitle ?? "-"})`,
+          reviewKind: "no_bom_rule",
         },
       ],
       bom,
@@ -404,6 +406,7 @@ export async function resolveLineItem(
       slicerProfile: filament?.slicerProfile ?? null,
       status: ready ? "ready" : "needs_review",
       reviewReason: ready ? null : `filament unknown (${missing.join(" + ")} not detected)`,
+      reviewKind: ready ? null : "filament_unknown",
     });
   }
 

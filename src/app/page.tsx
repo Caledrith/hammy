@@ -57,6 +57,12 @@ export default async function HomePage() {
           <div className="label">Ready</div>
         </div>
         <div className="card">
+          <div className="num" style={{ color: "var(--accent)" }}>
+            {jobs["printing"] ?? 0}
+          </div>
+          <div className="label">On printer</div>
+        </div>
+        <div className="card">
           <div className="num" style={{ color: "var(--amber)" }}>
             {needsReview}
           </div>
@@ -65,19 +71,19 @@ export default async function HomePage() {
       </div>
 
       <div className="actions-row" style={{ marginBottom: 8 }}>
-        <Link href="/plates">
-          <button className="primary">Open plates view</button>
+        <Link href="/print">
+          <button className="primary">Open to-print list</button>
         </Link>
       </div>
 
-      <h2>Ready by filament (plate groups)</h2>
+      <h2>Ready by filament</h2>
       {filamentRows.length === 0 ? (
         <div className="empty">No ready jobs yet. Sync orders, then resolve any that need review.</div>
       ) : (
         <div className="cards">
           {filamentRows.slice(0, 12).map((f) => (
             <Link
-              href="/plates"
+              href="/print"
               className="card"
               key={`${f.material}||${f.color}`}
               style={{ display: "block" }}
@@ -112,8 +118,8 @@ export default async function HomePage() {
 
       <h2>Quick links</h2>
       <div className="actions-row">
-        <Link href="/plates">
-          <button>Plates ({filamentRows.length} filaments)</button>
+        <Link href="/print">
+          <button>To print</button>
         </Link>
         <Link href="/queue">
           <button>Open queue ({totalJobs})</button>

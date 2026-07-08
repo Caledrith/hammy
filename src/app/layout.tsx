@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { runSync } from "./actions";
+import { SyncButton } from "./sync-button";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,16 +14,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <nav className="nav">
           <span className="brand">HAMMY</span>
-          <Link href="/plates">Plates</Link>
+          <Link href="/print">To print</Link>
           <Link href="/queue">Queue</Link>
           <Link href="/review">Review</Link>
           <Link href="/orders">Orders</Link>
           <span className="spacer" />
-          <form action={runSync}>
-            <button type="submit" className="primary">
-              Sync now
-            </button>
-          </form>
+          <SyncButton />
         </nav>
         <main className="container">{children}</main>
       </body>

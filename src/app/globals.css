@@ -311,6 +311,27 @@ button.danger:hover {
   border-radius: 10px;
 }
 
+details.job-list,
+details.optic-aliases {
+  margin-top: 10px;
+}
+
+details.job-list summary,
+details.optic-aliases summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.job-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid var(--border);
+  padding: 8px 0;
+}
+
 /* --- Plate (filament) grouping view --- */
 
 .swatch {

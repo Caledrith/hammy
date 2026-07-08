@@ -51,7 +51,7 @@ function toLineItemInput(li: NormalizedLineItem): LineItemInput {
  * This is where cross-channel identity (Shopify handle / Amazon ASIN / eBay SKU)
  * collapses to one internal product.
  */
-async function resolveProductKey(
+export async function resolveProductKey(
   db: Database,
   channel: Channel,
   handle: string | null,
@@ -88,6 +88,7 @@ async function writeResolution(
   db: Database,
   lineItemId: number,
   result: ResolveResult,
+  productKey: string | null,
 ): Promise<{ jobsCreated: number; needsReview: number }> {
   await db.delete(printJobs).where(eq(printJobs.orderLineItemId, lineItemId));
   await db.delete(bomComponents).where(eq(bomComponents.orderLineItemId, lineItemId));
@@ -107,6 +108,7 @@ async function writeResolution(
         slicerProfile: j.slicerProfile,
         status: j.status,
         reviewReason: j.reviewReason,
+        reviewKind: j.reviewKind,
       })),
     );
   }
@@ -124,7 +126,7 @@ async function writeResolution(
 
   await db
     .update(orderLineItems)
-    .set({ resolutionStatus: result.resolutionStatus, updatedAt: new Date() })
+    .set({ resolutionStatus: result.resolutionStatus, productKey, updatedAt: new Date() })
     .where(eq(orderLineItems.id, lineItemId));
 
   const needsReview = result.jobs.filter((j) => j.status === "needs_review").length;
@@ -143,7 +145,7 @@ async function resolveAndWrite(
   const recipe = await findRecipe(db, [productKey, li.productHandle, li.sku]);
   const ruleSet = recipe?.ruleSet ?? DEFAULT_RULESET;
   const result = await resolveLineItem(db, ruleSet, li);
-  return writeResolution(db, lineItemId, result);
+  return writeResolution(db, lineItemId, result, productKey);
 }
 
 /**
@@ -176,6 +178,22 @@ export async function reprocessLineItem(lineItemId: number): Promise<void> {
     properties: row.properties,
   };
   await resolveAndWrite(db, lineItemId, (row.channel ?? "shopify") as Channel, li);
+}
+
+/** Distinct line-item ids that still have needs_review jobs for a product. */
+export async function needsReviewLineItemIdsForProduct(productKey: string): Promise<number[]> {
+  const db = getDb();
+  const rows = await db
+    .selectDistinct({ id: printJobs.orderLineItemId })
+    .from(printJobs)
+    .innerJoin(orderLineItems, eq(printJobs.orderLineItemId, orderLineItems.id))
+    .where(and(eq(printJobs.status, "needs_review"), eq(orderLineItems.productKey, productKey)));
+  return rows.map((r) => r.id);
+}
+
+/** Sequentially re-run resolution for a set of line items. */
+export async function reprocessLineItems(ids: number[]): Promise<void> {
+  for (const id of ids) await reprocessLineItem(id);
 }
 
 /**

@@ -19,7 +19,12 @@
     "db:check": "tsx scripts/db-check.ts",
     "queue:stats": "tsx scripts/queue-stats.ts",
     "reresolve": "tsx scripts/reresolve.ts",
+    "backfill-product-keys": "tsx scripts/backfill-product-keys.ts",
+    "inspect-review": "tsx scripts/inspect-review-products.ts",
+    "resolve-material": "tsx scripts/resolve-material-from-store.ts",
+    "resolve-color": "tsx scripts/resolve-default-color.ts",
     "import-files": "tsx scripts/import-file-listing.ts",
+    "split-settings": "tsx scripts/split-settings.ts",
     "push-files": "tsx scripts/push-file-listing.ts",
     "worker": "tsx scripts/worker/index.ts"
   },

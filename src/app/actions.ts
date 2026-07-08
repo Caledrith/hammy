@@ -1,18 +1,14 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
+import { filamentMap, opticAliases, orderLineItems, printJobs, productRecipes } from "@/db/schema";
 import {
-  channelListings,
-  filamentMap,
-  opticAliases,
-  orderLineItems,
-  orders,
-  printJobs,
-  productRecipes,
-} from "@/db/schema";
-import { reprocessLineItem, syncOrders } from "@/lib/ingest";
+  needsReviewLineItemIdsForProduct,
+  reprocessLineItem,
+  reprocessLineItems,
+} from "@/lib/ingest";
 import { composePlates } from "@/lib/plates/compose";
 import { normalizeOptic } from "@/lib/recipes/normalize";
 import { DEFAULT_RULESET, ruleSetSchema } from "@/lib/recipes/types";
@@ -35,6 +31,7 @@ function revalidateAll() {
   revalidatePath("/review");
   revalidatePath("/orders");
   revalidatePath("/plates");
+  revalidatePath("/print");
 }
 
 export async function updateJobStatus(formData: FormData) {
@@ -46,6 +43,80 @@ export async function updateJobStatus(formData: FormData) {
     .update(printJobs)
     .set({ status: status as JobStatus, updatedAt: new Date() })
     .where(eq(printJobs.id, id));
+  revalidateAll();
+}
+
+/** Basic mode: mark every ready job in an order as manually put on a printer. */
+export async function markOrderReadyJobsPrinting(formData: FormData) {
+  const orderId = Number(formData.get("orderId"));
+  if (!orderId) return;
+  const db = getDb();
+  const lineItems = await db
+    .select({ id: orderLineItems.id })
+    .from(orderLineItems)
+    .where(eq(orderLineItems.orderId, orderId));
+  const ids = lineItems.map((l) => l.id);
+  if (ids.length === 0) return;
+  await db
+    .update(printJobs)
+    .set({ status: "printing", updatedAt: new Date() })
+    .where(and(inArray(printJobs.orderLineItemId, ids), eq(printJobs.status, "ready")));
+  revalidateAll();
+}
+
+/** Basic mode: mark every ready job of one filament (material + color) as put on a printer. */
+export async function markFilamentReadyJobsPrinting(formData: FormData) {
+  const material = String(formData.get("material") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+  if (!material || !color) return;
+  const db = getDb();
+  await db
+    .update(printJobs)
+    .set({ status: "printing", updatedAt: new Date() })
+    .where(
+      and(
+        eq(printJobs.materialOption, material),
+        eq(printJobs.colorOption, color),
+        eq(printJobs.status, "ready"),
+      ),
+    );
+  revalidateAll();
+}
+
+/** Basic mode: mark every on-printer job in an order as printed (done). */
+export async function markOrderPrintingJobsDone(formData: FormData) {
+  const orderId = Number(formData.get("orderId"));
+  if (!orderId) return;
+  const db = getDb();
+  const lineItems = await db
+    .select({ id: orderLineItems.id })
+    .from(orderLineItems)
+    .where(eq(orderLineItems.orderId, orderId));
+  const ids = lineItems.map((l) => l.id);
+  if (ids.length === 0) return;
+  await db
+    .update(printJobs)
+    .set({ status: "done", updatedAt: new Date() })
+    .where(and(inArray(printJobs.orderLineItemId, ids), eq(printJobs.status, "printing")));
+  revalidateAll();
+}
+
+/** Basic mode: mark every on-printer job of one filament (material + color) as printed (done). */
+export async function markFilamentPrintingJobsDone(formData: FormData) {
+  const material = String(formData.get("material") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
+  if (!material || !color) return;
+  const db = getDb();
+  await db
+    .update(printJobs)
+    .set({ status: "done", updatedAt: new Date() })
+    .where(
+      and(
+        eq(printJobs.materialOption, material),
+        eq(printJobs.colorOption, color),
+        eq(printJobs.status, "printing"),
+      ),
+    );
   revalidateAll();
 }
 
@@ -64,7 +135,7 @@ export async function setJobPriority(formData: FormData) {
 export async function addOpticAlias(formData: FormData) {
   const source = String(formData.get("source") ?? "").trim();
   const canonical = String(formData.get("canonical") ?? "").trim();
-  const lineItemId = Number(formData.get("lineItemId"));
+  const productKey = String(formData.get("productKey") ?? "").trim();
   if (!source || !canonical) return;
 
   const db = getDb();
@@ -80,15 +151,16 @@ export async function addOpticAlias(formData: FormData) {
       set: { canonicalOptic: canonical, sourceString: source },
     });
 
-  if (lineItemId) await reprocessLineItem(lineItemId);
+  if (productKey) await reprocessLineItems(await needsReviewLineItemIdsForProduct(productKey));
   revalidateAll();
 }
 
-export async function setLineItemFilamentDefault(formData: FormData) {
-  const lineItemId = Number(formData.get("lineItemId"));
+export async function setProductFilamentDefault(formData: FormData) {
+  const productKey = String(formData.get("productKey") ?? "").trim();
+  const productName = String(formData.get("productName") ?? "").trim();
   const material = String(formData.get("material") ?? "").trim();
   const color = String(formData.get("color") ?? "").trim();
-  if (!lineItemId || !material || !color) return;
+  if (!productKey || !material || !color) return;
 
   const db = getDb();
   const [filament] = await db
@@ -98,78 +170,27 @@ export async function setLineItemFilamentDefault(formData: FormData) {
     .limit(1);
   if (!filament) return;
 
-  const [lineItem] = await db
-    .select({
-      productHandle: orderLineItems.productHandle,
-      sku: orderLineItems.sku,
-      title: orderLineItems.title,
-      channel: orders.channel,
-    })
-    .from(orderLineItems)
-    .leftJoin(orders, eq(orderLineItems.orderId, orders.id))
-    .where(eq(orderLineItems.id, lineItemId))
+  const [existingRecipe] = await db
+    .select()
+    .from(productRecipes)
+    .where(eq(productRecipes.key, productKey))
     .limit(1);
-  if (!lineItem) return;
-
-  let productKey: string | null = null;
-  if (lineItem.channel) {
-    const listingCandidates = [lineItem.productHandle, lineItem.sku].filter(
-      (v): v is string => !!v,
-    );
-    for (const externalKey of listingCandidates) {
-      const [listing] = await db
-        .select({ productKey: channelListings.productKey })
-        .from(channelListings)
-        .where(
-          and(
-            eq(channelListings.channel, lineItem.channel),
-            eq(channelListings.externalKey, externalKey),
-          ),
-        )
-        .limit(1);
-      if (listing) {
-        productKey = listing.productKey;
-        break;
-      }
-    }
-  }
-
-  const recipeKeys = [
-    ...new Set(
-      [productKey, lineItem.productHandle, lineItem.sku].filter((v): v is string => !!v),
-    ),
-  ];
-  let existingRecipe: typeof productRecipes.$inferSelect | null = null;
-  for (const key of recipeKeys) {
-    const [recipe] = await db
-      .select()
-      .from(productRecipes)
-      .where(eq(productRecipes.key, key))
-      .limit(1);
-    if (recipe) {
-      existingRecipe = recipe;
-      break;
-    }
-  }
-
-  const key = existingRecipe?.key ?? productKey ?? lineItem.productHandle ?? lineItem.sku;
-  if (!key) return;
 
   const currentRuleSet = existingRecipe
     ? ruleSetSchema.parse(existingRecipe.ruleSet)
     : DEFAULT_RULESET;
   const ruleSet = { ...currentRuleSet, defaultMaterial: material, defaultColor: color };
-  const name = existingRecipe?.name ?? lineItem.title ?? key;
+  const name = existingRecipe?.name ?? productName ?? productKey;
 
   await db
     .insert(productRecipes)
-    .values({ key, name, ruleSet })
+    .values({ key: productKey, name, ruleSet })
     .onConflictDoUpdate({
       target: productRecipes.key,
       set: { name, ruleSet, updatedAt: new Date() },
     });
 
-  await reprocessLineItem(lineItemId);
+  await reprocessLineItems(await needsReviewLineItemIdsForProduct(productKey));
   revalidateAll();
 }
 
@@ -180,8 +201,10 @@ export async function reResolveLineItem(formData: FormData) {
   revalidateAll();
 }
 
-export async function runSync() {
-  await syncOrders();
+export async function reResolveProduct(formData: FormData) {
+  const productKey = String(formData.get("productKey") ?? "").trim();
+  if (!productKey) return;
+  await reprocessLineItems(await needsReviewLineItemIdsForProduct(productKey));
   revalidateAll();
 }
 

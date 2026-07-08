@@ -29,10 +29,22 @@ The reliable way is to let the CLI dump the fully-resolved current config with
    ```bash
    bambu-studio --export-settings full.json your-project.3mf
    ```
-   `full.json` is a complete, inheritance-free dump.
-3. Split it into the machine / process / filament JSONs (or keep the machine +
-   process together for `--load-settings` and the filament separate for
-   `--load-filaments`) and save them below.
+   `full.json` is a complete, inheritance-free dump of machine + process +
+   filament settings merged into one object.
+3. Split it with the helper script, which classifies each key against Bambu
+   Studio's own stock profiles (`resources/profiles/BBL/{machine,process,filament}`)
+   and writes the three files to the paths `manifest.json` maps for the given
+   model/material:
+   ```bash
+   npm run split-settings -- full.json --model P1S --material PLA
+   ```
+   For additional materials, re-export a project with that filament selected
+   and only write the filament file:
+   ```bash
+   npm run split-settings -- full-petg.json --model P1S --material PETG --only filament
+   ```
+   The script auto-detects the Bambu Studio install location; pass
+   `--resources <dir>` if yours is elsewhere.
 
 (Exact `--export-settings` behavior is version-dependent; confirm during the CLI
 spike in [`../scripts/worker/README.md`](../scripts/worker/README.md).)

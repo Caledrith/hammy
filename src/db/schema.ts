@@ -116,6 +116,9 @@ export const orderLineItems = pgTable(
     resolutionStatus: lineItemResolutionStatus("resolution_status")
       .notNull()
       .default("pending"),
+    // Internal product identity resolved at ingest time (channel_listings
+    // product_key, falling back to handle then SKU). Used to group review work.
+    productKey: text("product_key"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -123,6 +126,7 @@ export const orderLineItems = pgTable(
     uniqueIndex("order_line_items_external_id_idx").on(t.externalId),
     index("order_line_items_order_id_idx").on(t.orderId),
     index("order_line_items_resolution_idx").on(t.resolutionStatus),
+    index("order_line_items_product_key_idx").on(t.productKey),
   ],
 );
 
@@ -304,6 +308,10 @@ export const printJobs = pgTable(
     slicerProfile: text("slicer_profile"),
     status: printJobStatus("status").notNull().default("pending"),
     reviewReason: text("review_reason"),
+    // Structured review classification: 'no_bom_rule' | 'filament_unknown'.
+    // NULL when the job is not in review. Free text (not an enum) so new kinds
+    // don't require a migration.
+    reviewKind: text("review_kind"),
     priority: integer("priority").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -439,6 +447,8 @@ export const plateJobs = pgTable(
 // ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
+
+export type ReviewKind = "no_bom_rule" | "filament_unknown";
 
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
