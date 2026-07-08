@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { orderLineItems, orders, printJobs } from "@/db/schema";
+import { brandFromProperties } from "@/lib/recipes/engine";
 import {
   markFilamentPrintingJobsDone,
   markFilamentReadyJobsPrinting,
@@ -27,6 +28,32 @@ function fmtDateTime(d: Date | null): string {
     second: "2-digit",
     hour12: true,
   });
+}
+
+function fmtMoney(amount: string | null, currency: string | null): string {
+  if (amount == null || amount === "") return "";
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "";
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+    }).format(n);
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
+}
+
+/** Model label with the brand prefixed (e.g. "Leupold MK 4HD 2.5-10x42"). */
+function opticLabel(
+  optic: string | null,
+  properties: { name: string; value: string }[] | null,
+): string | null {
+  if (!optic) return null;
+  // "Universal" parts (e.g. Tip Grip) aren't a specific optic - no brand prefix.
+  if (optic === "Universal") return optic;
+  const brand = brandFromProperties(properties ?? []);
+  return brand ? `${brand} ${optic}` : optic;
 }
 
 function hrefFor(view: Group, tab: Tab): string {
@@ -93,17 +120,22 @@ export default async function PrintPage({
       colorHex: printJobs.colorHex,
       liTitle: orderLineItems.title,
       variantTitle: orderLineItems.variantTitle,
+      properties: orderLineItems.properties,
+      unitPrice: orderLineItems.unitPrice,
       orderId: orders.id,
       orderName: orders.name,
       customerName: orders.customerName,
       channel: orders.channel,
       processedAt: orders.processedAt,
+      currency: orders.currency,
+      orderTotal: orders.totalPrice,
+      discountCodes: orders.discountCodes,
     })
     .from(printJobs)
     .innerJoin(orderLineItems, eq(printJobs.orderLineItemId, orderLineItems.id))
     .innerJoin(orders, eq(orderLineItems.orderId, orders.id))
     .where(inArray(printJobs.status, ["ready", "printing"]))
-    .orderBy(asc(orders.processedAt), asc(printJobs.id))
+    .orderBy(desc(orders.processedAt), asc(printJobs.id))
     .limit(2000);
 
   const [nr] = await db
@@ -122,13 +154,16 @@ export default async function PrintPage({
 
   const active = rows.filter((r) => r.status === activeStatus);
 
-  // Group by order (oldest first, preserving query order).
+  // Group by order (newest first, preserving query order).
   interface OrderGroup {
     orderId: number;
     orderName: string | null;
     customerName: string | null;
     channel: string;
     processedAt: Date | null;
+    currency: string | null;
+    orderTotal: string | null;
+    discountCodes: string[];
     jobs: Row[];
   }
   const orderGroups = new Map<number, OrderGroup>();
@@ -141,6 +176,9 @@ export default async function PrintPage({
         customerName: row.customerName,
         channel: row.channel,
         processedAt: row.processedAt,
+        currency: row.currency,
+        orderTotal: row.orderTotal,
+        discountCodes: row.discountCodes ?? [],
         jobs: [],
       };
       orderGroups.set(row.orderId, group);
@@ -249,22 +287,31 @@ export default async function PrintPage({
                 </form>
               </div>
 
-              {group.jobs.map((job) => (
-                <div className="job-row" key={job.jobId}>
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <strong>{job.partType}</strong>
-                    {job.optic ? ` · ${job.optic}` : ""}
-                    <div className="muted">
-                      {job.orderName ?? `#${job.orderId}`} · {job.liTitle ?? "-"}
-                      {job.variantTitle ? ` · ${job.variantTitle}` : ""}
+              {group.jobs.map((job) => {
+                const optic = opticLabel(job.optic, job.properties);
+                return (
+                  <div className="job-row" key={job.jobId}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <strong>{job.partType}</strong>
+                      {optic ? (
+                        <>
+                          {" · "}
+                          <strong>{optic}</strong>
+                        </>
+                      ) : null}
+                      <div className="muted">
+                        {job.orderName ?? `#${job.orderId}`} · {job.liTitle ?? "-"}
+                        {job.variantTitle ? ` · ${job.variantTitle}` : ""}
+                        {job.unitPrice ? ` · ${fmtMoney(job.unitPrice, job.currency)}` : ""}
+                      </div>
+                    </div>
+                    <div className="mono">&times;{job.quantity}</div>
+                    <div>
+                      <JobAction jobId={job.jobId} status={job.status} />
                     </div>
                   </div>
-                  <div className="mono">&times;{job.quantity}</div>
-                  <div>
-                    <JobAction jobId={job.jobId} status={job.status} />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ))
         )
@@ -280,7 +327,26 @@ export default async function PrintPage({
                   {group.channel}
                 </span>
                 <span className="muted">{group.customerName ?? ""}</span>
+                {group.orderTotal ? (
+                  <strong style={{ marginLeft: 6 }}>
+                    {fmtMoney(group.orderTotal, group.currency)}
+                  </strong>
+                ) : null}
                 <div className="muted mono">{fmtDateTime(group.processedAt)}</div>
+                {group.discountCodes.length > 0 ? (
+                  <div style={{ marginTop: 2 }}>
+                    {group.discountCodes.map((code) => (
+                      <span
+                        key={code}
+                        className="badge cancelled"
+                        style={{ marginRight: 4 }}
+                        title="Discount code applied to this order"
+                      >
+                        code: {code}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <form action={orderBulkAction} className="inline">
                 <input type="hidden" name="orderId" value={group.orderId} />
@@ -290,14 +356,22 @@ export default async function PrintPage({
               </form>
             </div>
 
-            {group.jobs.map((job) => (
+            {group.jobs.map((job) => {
+              const optic = opticLabel(job.optic, job.properties);
+              return (
               <div className="job-row" key={job.jobId}>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <strong>{job.partType}</strong>
-                  {job.optic ? ` · ${job.optic}` : ""}
+                  {optic ? (
+                    <>
+                      {" · "}
+                      <strong>{optic}</strong>
+                    </>
+                  ) : null}
                   <div className="muted">
                     {job.liTitle ?? "-"}
                     {job.variantTitle ? ` · ${job.variantTitle}` : ""}
+                    {job.unitPrice ? ` · ${fmtMoney(job.unitPrice, job.currency)}` : ""}
                   </div>
                 </div>
 
@@ -328,7 +402,8 @@ export default async function PrintPage({
                   <JobAction jobId={job.jobId} status={job.status} />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ))
       )}

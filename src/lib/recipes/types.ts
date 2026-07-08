@@ -121,23 +121,15 @@ export const ruleSetSchema = z.object({
    */
   defaultMaterial: z.string().optional(),
   defaultColor: z.string().optional(),
-  /** Material keywords to detect within variant-title tokens / properties. */
+  /**
+   * Material keywords to detect within variant-title tokens / properties. The
+   * shop stocks only PLA+, PETG-CF and MJF Nylon, so we detect those plus the
+   * bare "PLA"/"PETG"/"Nylon" spellings and canonicalize them downstream
+   * (see canonicalizeMaterial).
+   */
   materialKeywords: z
     .array(z.string())
-    .default([
-      "PETG-CF",
-      "PETG",
-      "PLA+",
-      "PLA",
-      "ABS",
-      "ASA",
-      "TPU",
-      "PA-CF",
-      "PA12",
-      "PC",
-      "MJF Nylon",
-      "Nylon",
-    ]),
+    .default(["PETG-CF", "PETG", "PLA+", "PLA", "MJF Nylon", "Nylon"]),
   rules: z.array(bomRuleSchema).default([]),
 });
 

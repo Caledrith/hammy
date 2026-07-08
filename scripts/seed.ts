@@ -30,7 +30,7 @@ const lensCoverRuleSet: RuleSetInput = {
     ],
   },
   colorKeys: ["Color"],
-  materialKeywords: ["PETG-CF", "PETG", "PLA+", "PLA", "ABS", "ASA", "TPU"],
+  materialKeywords: ["PETG-CF", "PETG", "PLA+", "PLA", "MJF Nylon", "Nylon"],
   rules: [
     {
       label: "Objective cover",
@@ -43,9 +43,10 @@ const lensCoverRuleSet: RuleSetInput = {
       printed: [{ partType: "ocular_cover" }],
     },
     {
+      // Tip Grip is a cover attachment style, not a separately-printed part -
+      // the grip prints as part of the sized cover. Hardware only.
       label: "Tip Grip attachment",
       when: { style: ["Tip Grip"] },
-      printed: [{ partType: "tip_grip", fixedOptic: "Universal" }],
       hardware: [{ ref: "M3x10 socket head screw" }, { ref: "shock cord" }],
     },
     {
@@ -70,6 +71,23 @@ const lensCoverRuleSet: RuleSetInput = {
       printed: [{ partType: "killflash" }],
     },
   ],
+};
+
+/**
+ * Weapon-mounted flashlight / lens cover. Options come from the storefront's
+ * product-options app, which emits numbered property keys (e.g. "Flashlight-4",
+ * "Color-5"). The light model lives under a "Flashlight-*" key, so a prefix
+ * candidate captures it; color detection already prefix-matches "Color-*".
+ * Single printed part - only the captured light model + material/color matter.
+ */
+const flashlightCoverRuleSet: RuleSetInput = {
+  optic: {
+    candidates: ["Flashlight", "Flashlight Model", "Light Model"],
+    excludeKeys: ["Color", "Version"],
+  },
+  colorKeys: ["Color"],
+  materialKeywords: ["PETG-CF", "PETG", "PLA+", "PLA", "MJF Nylon", "Nylon"],
+  rules: [{ label: "default single part", printed: [{ partType: "print" }] }],
 };
 
 /**
@@ -157,13 +175,18 @@ const colorPalette: { color: string; hex: string }[] = [
   { color: "Purple", hex: "#6a3d9a" },
 ];
 
-// Materials that carry the full palette. Matches the engine's materialKeywords.
-const paletteMaterials = ["PLA+", "PLA", "PETG-CF", "PETG", "ABS", "ASA"];
+// The only materials the shop stocks in the full color palette.
+const paletteMaterials = ["PLA+", "PETG-CF"];
 
-const filaments: { material: string; color: string; hex: string }[] =
-  paletteMaterials.flatMap((material) =>
-    colorPalette.map(({ color, hex }) => ({ material, color, hex })),
-  );
+const filaments: { material: string; color: string; hex: string | null }[] = [
+  ...paletteMaterials.flatMap((material) =>
+    colorPalette.map(({ color, hex }) => ({ material, color, hex }) as const),
+  ),
+  // MJF Nylon is outsourced (HP Multi Jet Fusion), offered only in black.
+  { material: "MJF Nylon", color: "Black", hex: "#0a0a0a" },
+  // N/A covers non-printed line items (stickers, patches).
+  { material: "N/A", color: "N/A", hex: null },
+];
 
 // Printer-side defaults driven by the filament itself: carbon-fiber blends need a
 // hardened nozzle + textured plate; high-temp materials prefer an enclosure.
@@ -197,6 +220,24 @@ async function main() {
       set: { name: "Scope / Lens Cover for Optics", ruleSet: lensCoverRuleSet, updatedAt: new Date() },
     });
   console.log("Seeded recipe: lens-cover-for-scopes");
+
+  // 1a. Flashlight / light-lens cover recipe (upsert by key).
+  await db
+    .insert(productRecipes)
+    .values({
+      key: "light-lens-cover-for-flashlights",
+      name: "Light / Lens Cover for Weapon-Mounted Flashlights",
+      ruleSet: flashlightCoverRuleSet,
+    })
+    .onConflictDoUpdate({
+      target: productRecipes.key,
+      set: {
+        name: "Light / Lens Cover for Weapon-Mounted Flashlights",
+        ruleSet: flashlightCoverRuleSet,
+        updatedAt: new Date(),
+      },
+    });
+  console.log("Seeded recipe: light-lens-cover-for-flashlights");
 
   // 1b. Opt-in per-product filament defaults (ships empty).
   for (const d of productDefaults) {

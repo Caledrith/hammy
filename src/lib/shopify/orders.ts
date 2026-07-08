@@ -1,5 +1,9 @@
 import { shopifyGraphQL } from "./client";
 
+interface Money {
+  shopMoney: { amount: string; currencyCode?: string };
+}
+
 export interface ShopifyLineItem {
   id: string;
   title: string;
@@ -7,6 +11,8 @@ export interface ShopifyLineItem {
   sku: string | null;
   variant: { id: string; title: string | null } | null;
   product: { id: string; handle: string | null } | null;
+  /** Per-unit price before line discounts (distinguishes variants like Tip Grip vs Ranger Band). */
+  originalUnitPriceSet: Money | null;
   /** Line-item properties (from variant options apps / custom fields). */
   customAttributes: { key: string; value: string }[];
 }
@@ -32,6 +38,12 @@ export interface ShopifyOrder {
   displayFinancialStatus: string | null;
   displayFulfillmentStatus: string | null;
   currencyCode: string | null;
+  /** Grand total the customer paid. */
+  totalPriceSet: Money | null;
+  /** Total discount applied across the order. */
+  totalDiscountsSet: Money | null;
+  /** Discount code(s) applied to the order (empty when none). */
+  discountCodes: string[];
   customer: { firstName: string | null; lastName: string | null } | null;
   shippingAddress: ShopifyAddress | null;
   lineItems: { nodes: ShopifyLineItem[] };
@@ -55,6 +67,9 @@ const ORDER_FIELDS = /* GraphQL */ `
   displayFinancialStatus
   displayFulfillmentStatus
   currencyCode
+  totalPriceSet { shopMoney { amount currencyCode } }
+  totalDiscountsSet { shopMoney { amount } }
+  discountCodes
   customer { firstName lastName }
   shippingAddress { name address1 address2 city province zip country }
   lineItems(first: 100) {
@@ -65,6 +80,7 @@ const ORDER_FIELDS = /* GraphQL */ `
       sku
       variant { id title }
       product { id handle }
+      originalUnitPriceSet { shopMoney { amount } }
       customAttributes { key value }
     }
   }

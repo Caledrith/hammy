@@ -80,6 +80,10 @@ export const orders = pgTable(
     financialStatus: text("financial_status"),
     fulfillmentStatus: text("fulfillment_status"),
     currency: text("currency"),
+    // Money stored as decimal strings (channel-native) to avoid float drift.
+    totalPrice: text("total_price"),
+    totalDiscounts: text("total_discounts"),
+    discountCodes: jsonb("discount_codes").$type<string[]>().notNull().default([]),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     processedAt: timestamp("processed_at", { withTimezone: true }),
     // Channel-native "last updated" timestamp used for incremental sync cursors.
@@ -112,6 +116,8 @@ export const orderLineItems = pgTable(
     variantId: text("variant_id"),
     variantTitle: text("variant_title"),
     quantity: integer("quantity").notNull().default(1),
+    // Per-unit price (decimal string) at time of purchase.
+    unitPrice: text("unit_price"),
     properties: jsonb("properties").$type<LineItemProperty[]>().notNull().default([]),
     resolutionStatus: lineItemResolutionStatus("resolution_status")
       .notNull()

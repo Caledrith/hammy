@@ -3,7 +3,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
-import { filamentMap, opticAliases, orderLineItems, printJobs, productRecipes } from "@/db/schema";
+import { opticAliases, orderLineItems, printJobs, productRecipes } from "@/db/schema";
 import {
   needsReviewLineItemIdsForProduct,
   reprocessLineItem,
@@ -160,15 +160,12 @@ export async function setProductFilamentDefault(formData: FormData) {
   const productName = String(formData.get("productName") ?? "").trim();
   const material = String(formData.get("material") ?? "").trim();
   const color = String(formData.get("color") ?? "").trim();
-  if (!productKey || !material || !color) return;
+  // Either field may be left blank ("keep detected"): defaults are fallbacks
+  // applied only where per-order detection found nothing, so setting just the
+  // material fills the gap while each order keeps its own detected color.
+  if (!productKey || (!material && !color)) return;
 
   const db = getDb();
-  const [filament] = await db
-    .select({ id: filamentMap.id })
-    .from(filamentMap)
-    .where(and(eq(filamentMap.materialOption, material), eq(filamentMap.colorOption, color)))
-    .limit(1);
-  if (!filament) return;
 
   const [existingRecipe] = await db
     .select()
@@ -179,7 +176,11 @@ export async function setProductFilamentDefault(formData: FormData) {
   const currentRuleSet = existingRecipe
     ? ruleSetSchema.parse(existingRecipe.ruleSet)
     : DEFAULT_RULESET;
-  const ruleSet = { ...currentRuleSet, defaultMaterial: material, defaultColor: color };
+  const ruleSet = {
+    ...currentRuleSet,
+    ...(material ? { defaultMaterial: material } : {}),
+    ...(color ? { defaultColor: color } : {}),
+  };
   const name = existingRecipe?.name ?? productName ?? productKey;
 
   await db

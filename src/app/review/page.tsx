@@ -65,6 +65,8 @@ export default async function ReviewPage() {
     variantCounts: Map<string, number>;
     optics: Set<string>;
     totalUnits: number;
+    missingMaterial: number;
+    missingColor: number;
   }
 
   const groups = new Map<string, Group>();
@@ -85,6 +87,8 @@ export default async function ReviewPage() {
         variantCounts: new Map(),
         optics: new Set(),
         totalUnits: 0,
+        missingMaterial: 0,
+        missingColor: 0,
       };
       groups.set(key, group);
     }
@@ -95,6 +99,8 @@ export default async function ReviewPage() {
     group.variantCounts.set(variant, (group.variantCounts.get(variant) ?? 0) + 1);
     if (row.optic) group.optics.add(row.optic);
     group.totalUnits += row.quantity ?? 1;
+    if (!row.material) group.missingMaterial += 1;
+    if (!row.color) group.missingColor += 1;
   }
 
   const groupList = [...groups.values()].sort(
@@ -105,8 +111,9 @@ export default async function ReviewPage() {
     <>
       <h1>Needs review</h1>
       <p className="subtitle">
-        {rows.length} job(s) across {groupList.length} product group(s) (max 500). Fixes apply to the
-        whole product and re-resolve every affected order.
+        {rows.length} job(s) across {groupList.length} product group(s) (max 500). Defaults are
+        fallbacks: they only fill a field that wasn&apos;t detected, so a per-order color/material is
+        never overwritten. Fixes re-resolve every affected order.
       </p>
 
       {groupList.length === 0 ? (
@@ -118,7 +125,7 @@ export default async function ReviewPage() {
             group.reviewKind === "no_bom_rule"
               ? "No BOM rule matched these options — set a default filament or add a recipe rule."
               : group.reviewKind === "filament_unknown"
-                ? "Material/color not detected — set the product's default filament."
+                ? `Not detected on ${group.jobs.length} job(s): ${group.missingMaterial} missing material, ${group.missingColor} missing color. Set only the missing field below — leave the other on "keep detected" and each order keeps its own value.`
                 : (group.jobs[0]?.reason ?? "needs review");
           return (
             <div className="review-card" key={group.key}>
@@ -149,21 +156,17 @@ export default async function ReviewPage() {
                 <form action={setProductFilamentDefault} className="inline">
                   <input type="hidden" name="productKey" value={group.productKey} />
                   <input type="hidden" name="productName" value={group.title ?? ""} />
-                  <span className="muted">filament</span>
-                  <select name="material" defaultValue="" style={{ width: 120 }}>
-                    <option value="" disabled>
-                      material
-                    </option>
+                  <span className="muted">default</span>
+                  <select name="material" defaultValue="" style={{ width: 160 }}>
+                    <option value="">material: keep detected</option>
                     {materials.map((material) => (
                       <option value={material} key={material}>
                         {material}
                       </option>
                     ))}
                   </select>
-                  <select name="color" defaultValue="" style={{ width: 110 }}>
-                    <option value="" disabled>
-                      color
-                    </option>
+                  <select name="color" defaultValue="" style={{ width: 160 }}>
+                    <option value="">color: keep detected</option>
                     {colors.map((color) => (
                       <option value={color} key={color}>
                         {color}
@@ -171,7 +174,7 @@ export default async function ReviewPage() {
                     ))}
                   </select>
                   <button type="submit" className="primary">
-                    Set default filament &amp; re-resolve all
+                    Set default &amp; re-resolve all
                   </button>
                 </form>
 

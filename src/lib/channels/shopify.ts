@@ -30,6 +30,7 @@ function normalizeLineItem(li: ShopifyLineItem): NormalizedLineItem {
     variantId: li.variant?.id ?? null,
     variantTitle: li.variant?.title ?? null,
     quantity: li.quantity,
+    unitPrice: li.originalUnitPriceSet?.shopMoney.amount ?? null,
     properties: li.customAttributes.map((a) => ({ name: a.key, value: a.value })),
   };
 }
@@ -51,6 +52,9 @@ function normalizeOrder(so: ShopifyOrder): NormalizedOrder {
     financialStatus: so.displayFinancialStatus,
     fulfillmentStatus: so.displayFulfillmentStatus,
     currency: so.currencyCode,
+    totalPrice: so.totalPriceSet?.shopMoney.amount ?? null,
+    totalDiscounts: so.totalDiscountsSet?.shopMoney.amount ?? null,
+    discountCodes: so.discountCodes ?? [],
     cancelledAt: so.cancelledAt ? new Date(so.cancelledAt) : null,
     processedAt: so.processedAt ? new Date(so.processedAt) : null,
     channelUpdatedAt: so.updatedAt ? new Date(so.updatedAt) : null,

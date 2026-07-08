@@ -17,6 +17,8 @@ export interface NormalizedLineItem {
   variantId: string | null;
   variantTitle: string | null;
   quantity: number;
+  /** Per-unit price (as a decimal string, e.g. "24.00"), or null if unknown. */
+  unitPrice: string | null;
   properties: LineItemProperty[];
 }
 
@@ -31,6 +33,12 @@ export interface NormalizedOrder {
   financialStatus: string | null;
   fulfillmentStatus: string | null;
   currency: string | null;
+  /** Grand total paid (decimal string), or null if unknown. */
+  totalPrice: string | null;
+  /** Total discount applied (decimal string), or null if unknown. */
+  totalDiscounts: string | null;
+  /** Discount code(s) applied to the order (empty when none). */
+  discountCodes: string[];
   cancelledAt: Date | null;
   processedAt: Date | null;
   /** Channel-native "last updated" timestamp, drives the incremental cursor. */

@@ -1,7 +1,7 @@
 import { and, eq, ilike } from "drizzle-orm";
 import type { Database } from "../../db";
 import { filamentMap, opticAliases, partVariants } from "../../db/schema";
-import { normalizeOptic, normalizeValue } from "./normalize";
+import { canonicalizeMaterial, normalizeOptic, normalizeValue } from "./normalize";
 import { ruleSetSchema, type LineItemInput, type RuleSet } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -87,6 +87,22 @@ function findAttr(attrs: Attr[], candidates: string[]): Attr | null {
     if (hit) return hit;
   }
   return null;
+}
+
+/**
+ * Best-effort brand/manufacturer for display (e.g. "Leupold" shown before the
+ * scope model). Reads the same manufacturer-keyed property the optic strategy
+ * uses. Returns null when absent or "Other" (free-text model, no real brand).
+ */
+export function brandFromProperties(
+  properties: { name: string; value: string }[],
+): string | null {
+  const attrs: Attr[] = properties.map((p) => ({ key: p.name, value: p.value }));
+  const hit = findAttr(attrs, DEFAULT_MANUFACTURER_KEYS);
+  if (!hit) return null;
+  const value = hit.value.trim();
+  if (!value || normalizeValue(value) === "other") return null;
+  return value;
 }
 
 function escapeRegExp(s: string): string {
@@ -189,7 +205,12 @@ export function extractContext(ruleSet: RuleSet, lineItem: LineItemInput): Extra
   for (const a of attrs) valuePool.add(normalizeValue(a.value));
 
   const materialPool = [...variantTokens, ...attrs.map((a) => a.value)];
-  const { material } = detectMaterialInfo(materialPool, ruleSet.materialKeywords);
+  const { material: detectedMaterial } = detectMaterialInfo(
+    materialPool,
+    ruleSet.materialKeywords,
+  );
+  // Collapse to the canonical stocked material (PLA -> PLA+, PETG -> PETG-CF, ...).
+  const material = canonicalizeMaterial(detectedMaterial);
 
   // Color precedence:
   //  1. An explicit Color property (strip any material prefix + separator noise),
@@ -200,7 +221,9 @@ export function extractContext(ruleSet: RuleSet, lineItem: LineItemInput): Extra
   const colorAttr = findAttr(attrs, ruleSet.colorKeys);
   let color: string | null;
   if (colorAttr) {
-    const cleaned = trimSeparators(stripMaterialPrefix(colorAttr.value, material));
+    // Strip using the RAW detected material ("PLA"), which is what actually
+    // prefixes the color text, not the canonicalized form ("PLA+").
+    const cleaned = trimSeparators(stripMaterialPrefix(colorAttr.value, detectedMaterial));
     color = detectColorFromVocab([cleaned], ruleSet.colorVocab) ?? (cleaned || null);
   } else {
     color = detectColorFromVocab(
