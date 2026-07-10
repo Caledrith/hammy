@@ -16,6 +16,11 @@ import { DEFAULT_RULESET, type LineItemInput } from "./recipes/types";
 
 // First-run lookback so we don't pull the entire order history on a fresh DB.
 const DEFAULT_LOOKBACK_DAYS = 7;
+// Re-scan a window before the saved cursor each run. Shopify's `updated_at`
+// bumps on any edit and orders can share a boundary timestamp, so overlapping
+// guards against skipping an order that landed right at the last cursor. Upserts
+// are idempotent, so re-fetching this window is free.
+const SYNC_OVERLAP_MS = 10 * 60_000;
 const CANCELLABLE_JOB_STATUSES = ["pending", "ready", "needs_review", "assigned"] as const;
 
 export interface SyncResult {
@@ -222,7 +227,10 @@ export async function syncChannel(
   const firstRunDefault = options.full
     ? undefined
     : new Date(Date.now() - DEFAULT_LOOKBACK_DAYS * 86_400_000);
-  const since = options.since ?? state?.lastSyncedAt ?? firstRunDefault;
+  const cursor = state?.lastSyncedAt
+    ? new Date(state.lastSyncedAt.getTime() - SYNC_OVERLAP_MS)
+    : undefined;
+  const since = options.since ?? cursor ?? firstRunDefault;
 
   const channelOrders = await adapter.fetchOrders({ since, maxPages: options.maxPages });
   let newestUpdatedAt = state?.lastSyncedAt ?? null;

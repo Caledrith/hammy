@@ -127,9 +127,15 @@ export async function fetchAllOrders(
   for (let page = 0; page < maxPages; page++) {
     const result = await fetchOrdersPage({ ...rest, after });
     all.push(...result.nodes);
-    if (!result.pageInfo.hasNextPage || !result.pageInfo.endCursor) break;
+    if (!result.pageInfo.hasNextPage || !result.pageInfo.endCursor) return all;
     after = result.pageInfo.endCursor;
   }
+  // Reached the safety ceiling with more pages available: warn loudly so a
+  // truncated window is visible rather than silently dropping older orders.
+  console.warn(
+    `[shopify] fetchAllOrders hit maxPages=${maxPages} (${all.length} orders) with more remaining; ` +
+      `window may be truncated`,
+  );
   return all;
 }
 

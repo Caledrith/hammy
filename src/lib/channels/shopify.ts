@@ -72,10 +72,13 @@ export class ShopifyAdapter implements ChannelAdapter {
   async fetchOrders(options: FetchOrdersOptions = {}): Promise<NormalizedOrder[]> {
     // Shopify search syntax: no quotes around the ISO timestamp.
     const query = options.since ? `updated_at:>=${options.since.toISOString()}` : undefined;
+    // Drain the whole window (bounded by `since`). A high safety ceiling avoids
+    // runaway loops without silently dropping the oldest orders in the window,
+    // which is what caused syncs to skip a chunk of the previous day.
     const orders = await fetchAllOrders({
       query,
       first: 50,
-      maxPages: options.maxPages ?? 20,
+      maxPages: options.maxPages ?? 200,
     });
     console.log(`[shopify] fetched ${orders.length} orders${query ? ` (${query})` : ""}`);
     return orders.map(normalizeOrder);

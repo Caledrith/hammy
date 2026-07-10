@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { syncOrders } from "@/lib/ingest";
+import { runSyncOnce } from "@/lib/sync-runner";
 
 export const dynamic = "force-dynamic";
 
 async function run() {
   try {
-    const result = await syncOrders();
-    return NextResponse.json({ ok: true, result });
+    const { result, coalesced } = await runSyncOnce();
+    return NextResponse.json({ ok: true, coalesced, result });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : String(error) },
