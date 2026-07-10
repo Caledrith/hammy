@@ -66,6 +66,7 @@ const DEFAULT_EXCLUDE_KEYS = [
   "scope manufacturer",
   "scope cover manufacturer",
   "manufacturer",
+  "scope end",
 ];
 
 const DEFAULT_MANUFACTURER_KEYS = [
@@ -74,6 +75,22 @@ const DEFAULT_MANUFACTURER_KEYS = [
   "Manufacturer",
   "Optic Manufacturer",
 ];
+
+/**
+ * Property keys that commonly hold a product's model/label across the catalog
+ * (weapon-light clamps, silencer cases/mounts, etc.). Tried as a fallback after
+ * explicit recipe candidates and the manufacturer strategy, so a product like
+ * the "Tip Grip - Flashlight and Scope Clamp" surfaces its flashlight model
+ * ("Cloud Defensive Rein 3.0") even without a bespoke recipe. Prefix-matched,
+ * so numbered variants ("Flashlight-4") are covered too.
+ */
+const DEFAULT_OPTIC_CANDIDATES = ["Flashlight", "Light Model", "Silencer Model", "Model"];
+
+/** Values that are present but carry no real model (skip so N/A never displays). */
+function isNoOpticValue(value: string | null | undefined): boolean {
+  const v = normalizeValue(value ?? "");
+  return v === "" || v === "na" || v === "none" || v === "other" || v === "not listed";
+}
 
 function keyMatches(attrKey: string, candidate: string): boolean {
   const k = normalizeValue(attrKey);
@@ -84,6 +101,15 @@ function keyMatches(attrKey: string, candidate: string): boolean {
 function findAttr(attrs: Attr[], candidates: string[]): Attr | null {
   for (const cand of candidates) {
     const hit = attrs.find((a) => keyMatches(a.key, cand));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Like findAttr, but skips candidates whose value is a placeholder (N/A, etc.). */
+function findAttrWithValue(attrs: Attr[], candidates: string[]): Attr | null {
+  for (const cand of candidates) {
+    const hit = attrs.find((a) => keyMatches(a.key, cand) && !isNoOpticValue(a.value));
     if (hit) return hit;
   }
   return null;
@@ -153,13 +179,21 @@ function detectColorFromVocab(strings: string[], vocab: string[]): string | null
   return null;
 }
 
-/** Locate the optic model string using candidates -> manufacturer key -> leftover. */
+/**
+ * Locate the optic/model string. Strategy order (first hit wins):
+ *   1. Explicit recipe candidates.
+ *   2. Manufacturer strategy (scope model keyed by its brand).
+ *   3. Common model-bearing keys (Flashlight, Silencer Model, Model, ...).
+ *   4. Leftover heuristic (the single non-meta property).
+ * Placeholder values ("N/A", "Not Listed", ...) are skipped so an either/or
+ * product (scope OR flashlight) resolves to whichever was actually chosen.
+ */
 function extractOptic(attrs: Attr[], ruleSet: RuleSet): string | null {
   const strat = ruleSet.optic ?? {};
 
   // 1. Explicit candidates.
   if (strat.candidates?.length) {
-    const hit = findAttr(attrs, strat.candidates);
+    const hit = findAttrWithValue(attrs, strat.candidates);
     if (hit) return hit.value;
   }
 
@@ -172,23 +206,31 @@ function extractOptic(attrs: Attr[], ruleSet: RuleSet): string | null {
     const hit = attrs.find(
       (a) =>
         a !== mfrAttr &&
-        wanted.some((w) => normalizeValue(a.key) === normalizeValue(w)),
+        wanted.some((w) => normalizeValue(a.key) === normalizeValue(w)) &&
+        !isNoOpticValue(a.value),
     );
     if (hit) return hit.value;
     // Manufacturer present but the model key just starts with it.
     const startsHit = attrs.find(
-      (a) => a !== mfrAttr && normalizeValue(a.key).startsWith(normalizeValue(mfr)),
+      (a) =>
+        a !== mfrAttr &&
+        normalizeValue(a.key).startsWith(normalizeValue(mfr)) &&
+        !isNoOpticValue(a.value),
     );
     if (startsHit) return startsHit.value;
   }
 
-  // 3. Leftover heuristic: the one property that isn't a known meta field.
+  // 3. Common model-bearing keys (fallback for products without a bespoke recipe).
+  const modelHit = findAttrWithValue(attrs, DEFAULT_OPTIC_CANDIDATES);
+  if (modelHit) return modelHit.value;
+
+  // 4. Leftover heuristic: the one property that isn't a known meta field.
   const exclude = (strat.excludeKeys ?? DEFAULT_EXCLUDE_KEYS).map(normalizeValue);
   const leftovers = attrs.filter((a) => {
     const k = normalizeValue(a.key);
     return !exclude.some((ex) => k === ex || k.startsWith(ex));
   });
-  if (leftovers.length === 1) return leftovers[0].value;
+  if (leftovers.length === 1 && !isNoOpticValue(leftovers[0].value)) return leftovers[0].value;
 
   return null;
 }

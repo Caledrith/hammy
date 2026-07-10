@@ -56,6 +56,40 @@ function opticLabel(
   return brand ? `${brand} ${optic}` : optic;
 }
 
+const PLACEHOLDER_VALUES = new Set(["", "n/a", "na", "none", "not listed", "other", "-"]);
+
+/**
+ * Meaningful King Options selections to surface on the card (mag slot count,
+ * pegboard type, etc.). Drops placeholder values and hidden app keys, plus the
+ * value already shown as the optic so it isn't repeated.
+ */
+function visibleProps(
+  properties: { name: string; value: string }[] | null,
+  optic: string | null,
+): { name: string; value: string }[] {
+  if (!properties) return [];
+  return properties.filter((p) => {
+    if (!p.name || p.name.startsWith("_")) return false;
+    const v = (p.value ?? "").trim();
+    if (PLACEHOLDER_VALUES.has(v.toLowerCase())) return false;
+    if (optic && v === optic) return false;
+    return true;
+  });
+}
+
+function PropList({ props }: { props: { name: string; value: string }[] }) {
+  if (props.length === 0) return null;
+  return (
+    <div className="prop-list">
+      {props.map((p, i) => (
+        <span className="prop" key={`${p.name}-${i}`}>
+          {p.name}: <strong>{p.value}</strong>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function hrefFor(view: Group, tab: Tab): string {
   const params = new URLSearchParams();
   if (view === "plate") params.set("view", "plate");
@@ -289,6 +323,7 @@ export default async function PrintPage({
 
               {group.jobs.map((job) => {
                 const optic = opticLabel(job.optic, job.properties);
+                const props = visibleProps(job.properties, job.optic);
                 return (
                   <div className="job-row" key={job.jobId}>
                     <div style={{ flex: 1, minWidth: 200 }}>
@@ -304,6 +339,7 @@ export default async function PrintPage({
                         {job.variantTitle ? ` · ${job.variantTitle}` : ""}
                         {job.unitPrice ? ` · ${fmtMoney(job.unitPrice, job.currency)}` : ""}
                       </div>
+                      <PropList props={props} />
                     </div>
                     <div className="mono">&times;{job.quantity}</div>
                     <div>
@@ -358,6 +394,7 @@ export default async function PrintPage({
 
             {group.jobs.map((job) => {
               const optic = opticLabel(job.optic, job.properties);
+              const props = visibleProps(job.properties, job.optic);
               return (
               <div className="job-row" key={job.jobId}>
                 <div style={{ flex: 1, minWidth: 200 }}>
@@ -373,6 +410,7 @@ export default async function PrintPage({
                     {job.variantTitle ? ` · ${job.variantTitle}` : ""}
                     {job.unitPrice ? ` · ${fmtMoney(job.unitPrice, job.currency)}` : ""}
                   </div>
+                  <PropList props={props} />
                 </div>
 
                 <div style={{ minWidth: 140 }}>
